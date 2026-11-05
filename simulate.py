@@ -92,6 +92,30 @@ def degrade_only(ls_xz, sigma_z=None, sigma_x=None, att_exp=None, surface=None):
     return (blurred * att).astype(np.float32), target.astype(np.float32)
 
 
+def target_scale_weight(target, thin_px=None, strength=None, floor=None):
+    """
+    按"PAM 可见尺度"给监督目标做**软加权**（不删像素）。
+
+    原理：高频（小于 ~thin_px 的结构）在 AR-PAM 里已被横向 PSF 抹掉，
+    逼网络在这些像素上复现光片的毛细血管 = 逼它脑补。这里只降低它们的
+    监督权重，结构和目标都保留，所以：
+      * 输入（声光）完全不变，物理前向也不变 -> "保持声光"；
+      * 保留血管的边缘仍按原权重监督 -> Z 向清晰度不受影响。
+
+    返回与 target 同形状的权重，范围 [floor, 1]。
+    """
+    thin_px = C.THIN_SCALE_PX if thin_px is None else float(thin_px)
+    strength = C.THIN_WEIGHT_STRENGTH if strength is None else float(strength)
+    floor = C.THIN_WEIGHT_FLOOR if floor is None else float(floor)
+
+    t = np.asarray(target, dtype=np.float32)
+    smooth = gaussian_filter(t, sigma=(0.0, thin_px))
+    thin = np.maximum(t - smooth, 0.0)                 # 比 thin_px 更细的结构
+    rel = thin / (t + 1e-3)
+    w = 1.0 / (1.0 + strength * rel)
+    return np.clip(w, floor, 1.0).astype(np.float32)
+
+
 def generate_pseudo_pam(ls_xz, rng=None, sigma_z=None, sigma_x=None, att_exp=None,
                         speckle_scale=None, noise_sigma=None, noise_blur=None,
                         surface=None, gain=1.0, mode=None):

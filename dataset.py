@@ -20,7 +20,7 @@ from torch.utils.data import Dataset
 
 import config as C
 from data_reader import LightsheetReader, load_or_compute_stats
-from simulate import generate_pseudo_pam
+from simulate import generate_pseudo_pam, target_scale_weight
 
 
 class PseudoPairDataset(Dataset):
@@ -71,7 +71,11 @@ class PseudoPairDataset(Dataset):
         Y = torch.from_numpy(target[np.newaxis, ...])
         Cc = torch.from_numpy(clean_center[np.newaxis, ...])
         meta = torch.tensor([sigma_z, sigma_x, att_exp], dtype=torch.float32)
-        return X, Y, Cc, meta
+        if C.TARGET_SCALE_WEIGHT:
+            W = torch.from_numpy(target_scale_weight(target)[np.newaxis, ...])
+        else:
+            W = torch.ones_like(Y)
+        return X, Y, Cc, meta, W
 
 
 def build_split():

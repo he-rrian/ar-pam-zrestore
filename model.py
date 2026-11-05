@@ -98,6 +98,7 @@ def total_loss(
     raw_input=None,
     clean_deg=None,
     meta=None,
+    weight=None,
     lam_mean=0.05,
     lam_grad=0.20,
     lam_laplace=0.05,
@@ -109,6 +110,9 @@ def total_loss(
     #    v2 去掉了 target 的上限 clip，最亮像素可能到 2~4；权重必须封顶，
     #    否则单个镜面反射像素会主导整个 batch 的梯度。
     w = 1.0 + 4.0 * torch.clamp(target, 0.0, 1.0)
+    if weight is not None:
+        # 尺度加权：对 PAM 看不到的细结构降权，避免逼网络脑补
+        w = w * weight
     loss_spatial = ((w * torch.sqrt((pred - target) ** 2 + 1e-3)).sum()
                     / (w.sum() + 1e-6))
 

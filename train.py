@@ -86,14 +86,15 @@ def main():
     for ep in range(1, args.epochs + 1):
         model.train()
         tl = 0.0
-        for X, Y, Cg, meta in train_loader:
-            X, Y, Cg, meta = [t.to(device, non_blocking=True) for t in (X, Y, Cg, meta)]
+        for X, Y, Cg, meta, W in train_loader:
+            X, Y, Cg, meta, W = [t.to(device, non_blocking=True) for t in (X, Y, Cg, meta, W)]
             pred = model(X)
             loss = total_loss(
                 pred, Y,
                 raw_input=X[:, 2:3],
                 clean_deg=Cg,
                 meta=meta,
+                weight=W,
                 lam_mean=C.LAM_MEAN, lam_grad=C.LAM_GRAD, lam_laplace=C.LAM_LAPLACE,
                 lam_physics=C.LAM_PHYSICS, lam_bg=C.LAM_BG, lam_tv=C.LAM_TV,
             )
@@ -108,11 +109,11 @@ def main():
         model.eval()
         vl = 0.0
         with torch.no_grad():
-            for X, Y, Cg, meta in val_loader:
-                X, Y, Cg, meta = [t.to(device, non_blocking=True) for t in (X, Y, Cg, meta)]
+            for X, Y, Cg, meta, W in val_loader:
+                X, Y, Cg, meta, W = [t.to(device, non_blocking=True) for t in (X, Y, Cg, meta, W)]
                 pred = model(X)
                 vl += float(total_loss(pred, Y, raw_input=X[:, 2:3], clean_deg=Cg,
-                                       meta=meta, lam_mean=C.LAM_MEAN, lam_grad=C.LAM_GRAD,
+                                       meta=meta, weight=W, lam_mean=C.LAM_MEAN, lam_grad=C.LAM_GRAD,
                                        lam_laplace=C.LAM_LAPLACE, lam_physics=C.LAM_PHYSICS,
                                        lam_bg=C.LAM_BG, lam_tv=C.LAM_TV).item())
         vl /= max(1, len(val_loader))
