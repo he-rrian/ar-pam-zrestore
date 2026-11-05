@@ -116,9 +116,32 @@ def target_scale_weight(target, thin_px=None, strength=None, floor=None):
     return np.clip(w, floor, 1.0).astype(np.float32)
 
 
+def add_surface_echo(img, pia, rng=None, amp=None, sigma=None):
+    """
+    在伪声光**输入**上叠一条表面回波（目标里没有，所以网络学到的是"忽略它"）。
+
+    为什么要显式建模：真实声光在脑表面有一条亮弧（实测 回波/血管 p99 中位
+    0.59、p90 3.19，深 154±130 层、半高宽 7 层），而伪数据里没有。推理时
+    网络会把这根分布外的亮弧当成结构。
+
+    实测中位只有 0.59×，并非"3~4 倍压倒一切"，所以默认关闭（SURFACE_ECHO=False）；
+    如果增强结果在表面出现亮弧伪影，把它打开。
+    """
+    if pia is None:
+        return img
+    rng = rng or np.random.default_rng()
+    amp = C.ECHO_AMP if amp is None else float(amp)
+    sigma = C.ECHO_SIGMA if sigma is None else float(sigma)
+    a = float(rng.uniform(0.5, 2.0)) * amp
+    z = np.arange(img.shape[0], dtype=np.float32)[:, None]
+    s = np.asarray(pia, dtype=np.float32)[None, :]
+    echo = a * np.exp(-(z - s) ** 2 / (2.0 * sigma ** 2))
+    return (img + echo * (img.max() + 1e-6)).astype(np.float32)
+
+
 def generate_pseudo_pam(ls_xz, rng=None, sigma_z=None, sigma_x=None, att_exp=None,
                         speckle_scale=None, noise_sigma=None, noise_blur=None,
-                        surface=None, gain=1.0, mode=None):
+                        surface=None, gain=1.0, mode=None, pia=None):
     """
     返回 (pseudo, target, clean)：
       target : 横向匹配到 AR-PAM 的光片（监督目标）
@@ -150,4 +173,6 @@ def generate_pseudo_pam(ls_xz, rng=None, sigma_z=None, sigma_x=None, att_exp=Non
 
     base = clean * float(gain)
     pseudo = np.maximum(base + base * speckle + gauss, 0.0).astype(np.float32)
+    if C.SURFACE_ECHO and pia is not None:
+        pseudo = add_surface_echo(pseudo, pia, rng=rng)
     return pseudo, target, clean_for_loss

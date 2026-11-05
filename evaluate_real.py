@@ -55,7 +55,7 @@ def main():
     n = min(len(raw), len(enh))
     idx = np.linspace(0, n - 1, min(args.n_frames, n)).astype(int)
 
-    fw_raw, fw_enh = [], []
+    fw_raw, fw_enh, fw_z = [], [], []
     bg_std, ghost_vals, energy = [], [], []
     fwd_res = []
 
@@ -76,6 +76,7 @@ def main():
                 if np.isfinite(fr) and np.isfinite(fe) and fr < 25 and fe < 25:
                     fw_raw.append(fr)
                     fw_enh.append(fe)
+                    fw_z.append(k)
 
         # 2. 空白区噪声/幻影
         empty = r < 0.02
@@ -99,6 +100,17 @@ def main():
         print(f"FWHM enh  median {np.median(fw_enh):.2f} px  (IQR {np.percentile(fw_enh, 25):.2f}-{np.percentile(fw_enh, 75):.2f})")
         print(f"FWHM 收窄比例 median {np.median(fw_raw) / (np.median(fw_enh) + 1e-9):.2f}x")
         print(f"  真正变窄的峰占比 (enh < raw): {np.mean(fw_enh < fw_raw) * 100:.1f}%")
+    # 轴向深度稳定性：分深度带看收窄倍数（深层不应比浅层明显变差）
+    if len(fw_z):
+        zz = np.array(fw_z); rr = np.array(fw_raw); ee = np.array(fw_enh)
+        edges = [(0, 100), (100, 200), (200, 320), (320, raw.shape[1])]
+        print("按深度的收窄倍数（Z 稳定性）:")
+        for a, b in edges:
+            m = (zz >= a) & (zz < b)
+            if m.sum() >= 10:
+                print(f"  z {a:>3}-{b:<3}: n={m.sum():4d}  raw {np.median(rr[m]):5.2f} -> enh {np.median(ee[m]):5.2f} px"
+                      f"  ({np.median(rr[m]) / max(np.median(ee[m]), 1e-6):.2f}x)")
+
     print(f"空白区 enhanced std: {np.median(bg_std) if bg_std else float('nan'):.4f}")
     print(f"空白区 ghost 均值:   {np.median(ghost_vals) if ghost_vals else float('nan'):.4f}")
     print(f"能量比 (enh/raw):    {np.median(energy):.2f}x")
