@@ -35,12 +35,16 @@ def worker_init_fn(worker_id):
 
 
 def build_real_probe(cache_path, n_ctx=5):
-    """固定取缓存中间 5 帧做真实域探针（1,5,Z,X）。"""
+    """固定取缓存中间 5 帧做真实域探针（1,5,Z,X）；开 RL 先验时补第 6 通道。"""
     arr, _ = pam_io.load_cache(cache_path)
     mid = len(arr) // 2
     idx = [int(np.clip(mid + k, 0, len(arr) - 1)) for k in (-2, -1, 0, 1, 2)][:n_ctx]
-    X = torch.from_numpy(np.stack([np.asarray(arr[i], dtype=np.float32) for i in idx])[None])
-    return X
+    arrs = np.stack([np.asarray(arr[i], dtype=np.float32) for i in idx])
+    if C.USE_RL_PRIOR:
+        from simulate import rl_deconv
+        rl = rl_deconv(arrs[len(arrs) // 2], C.PSF_SIGMA_Z)[None]
+        arrs = np.concatenate([arrs, rl], axis=0)
+    return torch.from_numpy(arrs[None])
 
 
 def main():
@@ -74,7 +78,8 @@ def main():
                             worker_init_fn=worker_init_fn,
                             persistent_workers=args.workers > 0)
 
-    model = AxialNAFNet().to(device)
+    model = AxialNAFNet(in_ch=6 if C.USE_RL_PRIOR else 5,
+                        base_ch=-1 if C.USE_RL_PRIOR else 2).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=C.LR, weight_decay=C.WEIGHT_DECAY)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs, eta_min=1e-6)
 

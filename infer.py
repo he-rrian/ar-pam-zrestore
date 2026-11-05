@@ -45,6 +45,10 @@ def run(cache_path, model, out_npy, batch=8, device="cuda"):
                 idx = [int(np.clip(i + k, 0, n - 1)) for k in (-2, -1, 0, 1, 2)]
                 block.append(np.stack([np.asarray(arr[j], dtype=np.float32) for j in idx]))
             x = torch.from_numpy(np.stack(block)).to(device)
+            if C.USE_RL_PRIOR:
+                from simulate import rl_deconv
+                rl = np.stack([rl_deconv(x[i, 2].cpu().numpy(), C.PSF_SIGMA_Z) for i in range(x.shape[0])])[:, None]
+                x = torch.cat([x, torch.from_numpy(rl).to(device)], dim=1)
             out[s:e] = model(x).squeeze(1).cpu().numpy()
     np.save(out_npy, out)
     print(f"[infer] {out_npy} {out.shape}")
@@ -93,7 +97,8 @@ def main():
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = AxialNAFNet().to(device)
+    model = AxialNAFNet(in_ch=6 if C.USE_RL_PRIOR else 5,
+                        base_ch=-1 if C.USE_RL_PRIOR else 2).to(device)
     sd = torch.load(args.ckpt, map_location=device, weights_only=True)
     model.load_state_dict(sd)
     model.eval()

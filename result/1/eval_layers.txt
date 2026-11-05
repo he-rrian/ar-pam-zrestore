@@ -1,0 +1,13 @@
+/root/miniconda3/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py:3023: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+/root/miniconda3/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py:3024: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[None, :]
+[LS] 从 4_ls_grid.npy 读 457 层窗口
+[LS] 采样 20 个 Y，表面完整落在窗口内的 0 个 (0%)
+     有效 Y 范围: 无
+[curve] LS vs PAM(raw) density–depth 相关 = nan
+[FWHM vs 表面下深度]  median Z-FWHM (px, 1 px = 2.1 um)
+      0-100 层: raw   6.0  enh   9.0
+    100-200 层: raw   4.3  enh   2.2
+    200-320 层: raw   4.0  enh   2.2
+saved /root/autodl-tmp/ar_pam/qc/layers_mouse4.png

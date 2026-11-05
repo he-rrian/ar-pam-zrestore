@@ -32,7 +32,7 @@ def load_ls_flat(get_img, n=60, out_z=320):
     for y in ys:
         img = get_img(int(y))
         pia = S.pia_from_ls(img)
-        m = S.valid_columns(pia, img.shape[0], need=out_z, colmax=img.max(axis=0))
+        m = S.valid_columns(pia, img.shape[0], need=min(out_z, 120), colmax=img.max(axis=0))
         pias.append((y, pia, float(m.mean())))
         if m.mean() < 0.6:          # 表面大部分不在窗口内，跳过
             continue

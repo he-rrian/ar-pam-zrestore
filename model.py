@@ -2,6 +2,8 @@ import math
 
 import torch
 import torch.nn as nn
+
+import config as C
 import torch.nn.functional as F
 
 
@@ -34,8 +36,9 @@ class AxialNAFNet(nn.Module):
       * 去掉上界 clamp(…,1.0)，避免血管峰被削平。
     """
 
-    def __init__(self, in_ch=5, base=32):
+    def __init__(self, in_ch=5, base=32, base_ch=2):
         super().__init__()
+        self.base_ch = base_ch
         self.stem = nn.Conv2d(in_ch, base, 3, padding=1)
         dilations = [1, 2, 4, 1, 2, 4]
         self.blocks = nn.Sequential(
@@ -52,7 +55,11 @@ class AxialNAFNet(nn.Module):
 
     def forward(self, x):
         h = self.blocks(self.stem(x))
-        return F.relu(x[:, 2:3, :, :] + self.head(h))
+        if self.base_ch == -1:
+            base = x[:, -1:, :, :]          # 最后一通道（RL 物理先验）
+        else:
+            base = x[:, self.base_ch:self.base_ch + 1, :, :]
+        return F.relu(base + self.head(h))
 
 
 def make_psf_kernel(sigma_z, sigma_x, kz=41, kx=11):
@@ -84,8 +91,13 @@ def physical_forward(pred, meta):
     sigma_x = meta[:, 1].to(device=pred.device, dtype=pred.dtype)
     att_exp = meta[:, 2].to(device=pred.device, dtype=pred.dtype)
 
-    k = make_psf_kernel(sigma_z, sigma_x)
-    deg = F.conv2d(pred, k, padding=(k.shape[2] // 2, k.shape[3] // 2), groups=pred.shape[0])
+    k = make_psf_kernel(sigma_z, sigma_x)          # (B, 1, kz, kx)
+    b = pred.shape[0]
+    # pred 是 (B, 1, Z, X)；逐样本核要做 groups=B 的卷积，
+    # 必须先把通道维和 batch 维换过来：(1, B, Z, X) 配 (B, 1, kz, kx)。
+    # 旧写法直接 conv2d(pred, k, groups=B) 会报 "expected 4 channels, got 1"。
+    deg = F.conv2d(pred.transpose(0, 1), k,
+                   padding=(k.shape[2] // 2, k.shape[3] // 2), groups=b).transpose(0, 1)
 
     z = torch.linspace(0.0, 1.0, pred.shape[2], device=pred.device, dtype=pred.dtype)
     z = z[None, None, :, None]
@@ -127,8 +139,11 @@ def total_loss(
     if weight is not None:
         # 尺度加权：对 PAM 看不到的细结构降权，避免逼网络脑补
         w = w * weight
-    loss_spatial = ((w * torch.sqrt((pred - target) ** 2 + 1e-3)).sum()
-                    / (w.sum() + 1e-6))
+    if getattr(C, "LOSS_L2", False):
+        loss_spatial = (w * (pred - target) ** 2).sum() / (w.sum() + 1e-6)
+    else:
+        loss_spatial = ((w * torch.sqrt((pred - target) ** 2 + 1e-3)).sum()
+                        / (w.sum() + 1e-6))
 
     # 2. 能量/均值约束
     loss_mean = torch.abs(pred.mean() - target.mean())

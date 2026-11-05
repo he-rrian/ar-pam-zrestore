@@ -92,6 +92,18 @@ def degrade_only(ls_xz, sigma_z=None, sigma_x=None, att_exp=None, surface=None):
     return (blurred * att).astype(np.float32), target.astype(np.float32)
 
 
+def rl_deconv(img, sigma, iters=None):
+    """Richardson-Lucy 沿 Z 的快速版，用作物理先验通道。"""
+    iters = C.RL_ITERS if iters is None else int(iters)
+    a = np.asarray(img, np.float32)
+    est = np.maximum(a, 0) + 1e-4
+    for _ in range(iters):
+        conv = gaussian_filter1d(est, sigma, axis=0, mode="nearest")
+        est = est * gaussian_filter1d(a / (conv + 1e-6), sigma, axis=0, mode="nearest")
+        est = np.maximum(est, 0)
+    return est.astype(np.float32)
+
+
 def target_scale_weight(target, thin_px=None, strength=None, floor=None):
     """
     按"PAM 可见尺度"给监督目标做**软加权**（不删像素）。

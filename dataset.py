@@ -20,7 +20,7 @@ from torch.utils.data import Dataset
 
 import config as C
 from data_reader import LightsheetReader, load_or_compute_stats
-from simulate import generate_pseudo_pam, target_scale_weight
+from simulate import generate_pseudo_pam, target_scale_weight, rl_deconv
 
 
 class PseudoPairDataset(Dataset):
@@ -73,6 +73,9 @@ class PseudoPairDataset(Dataset):
             if off_layers == 0:
                 target, clean_center = y_hr, clean
 
+        if C.USE_RL_PRIOR:
+            # 物理先验：对中心帧做 RL 反卷积，作为第 6 通道
+            channels.append(rl_deconv(channels[2], sigma_z))
         X = torch.from_numpy(np.stack(channels, axis=0))
         Y = torch.from_numpy(target[np.newaxis, ...])
         Cc = torch.from_numpy(clean_center[np.newaxis, ...])

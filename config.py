@@ -172,8 +172,8 @@ RF_SAMPLES_PER_PX = PAM_RF_PITCH_UM / LS_PITCH_UM
 # 这样输入（声光）与物理前向都不变，保留血管的 Z 向监督也不变。
 TARGET_SCALE_WEIGHT = True
 THIN_SCALE_PX = 2.0        # 2 px = 20 μm（约等于横向 PSF 下限）
-THIN_WEIGHT_STRENGTH = 3.0
-THIN_WEIGHT_FLOOR = 0.15
+THIN_WEIGHT_STRENGTH = 1.0
+THIN_WEIGHT_FLOOR = 0.40
 
 # 表面回波：实测 回波/血管p99 中位 0.59、p90 3.19，深 154±130 层、半高宽 7 层。
 # 伪数据默认没有回波；若增强结果在表面出现亮弧伪影，把 SURFACE_ECHO 打开。
@@ -216,19 +216,24 @@ VAL_Y_STRIDE = 5
 
 BATCH_SIZE = 4
 NUM_WORKERS = 4
-EPOCHS = 60
-LR = 3e-4
+EPOCHS = 80
+LR = 4e-4
 WEIGHT_DECAY = 1e-4
 GRAD_CLIP = 1.0
 
 # 损失权重
 LAM_MEAN = 0.05
-LAM_GRAD = 0.20
+LAM_GRAD = 0.50
 LAM_LAPLACE = 0.05
 LAM_PHYSICS = 1.0
 LAM_BG = 0.5
 LAM_TV = 0.01
-LAM_THIN = 0.10           # 反幻觉：惩罚比 clean 更细的输出结构
+LAM_THIN = 0.0
+# 第 3 轮：把 RL 反卷积结果作为第 6 个输入通道（物理先验）
+USE_RL_PRIOR = True
+# 第 4 轮：L1/Charbonnier 的最优解偏向平滑，改用 L2 让峰值/振铃被对称惩罚
+LOSS_L2 = True
+RL_ITERS = 15           # 反幻觉：惩罚比 clean 更细的输出结构
 
 
 def pam_frame_to_ls_row(frame_idx):
