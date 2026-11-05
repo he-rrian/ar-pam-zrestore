@@ -1,0 +1,11 @@
+# 原始数据与派生大文件：只备份代码/文档，不进库
+data/
+work/
+qc/
+__pycache__/
+*.pyc
+*.pth
+*.npy
+*.ims
+*.bundle
+.venv/
