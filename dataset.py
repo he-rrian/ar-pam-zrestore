@@ -54,6 +54,12 @@ class PseudoPairDataset(Dataset):
         y_center = int(self.y_center_indices[idx])
         channels, target, clean_center = [], None, None
 
+        # 表面回波：按概率给输入叠一条亮弧（目标里没有 -> 学会忽略它）
+        pia = None
+        if C.SURFACE_ECHO and rng.random() < C.ECHO_PROB:
+            from surface import pia_from_ls
+            pia = pia_from_ls(self.reader.get_xz(y_center, 0))
+
         for off_layers in C.CONTEXT_LS_LAYERS:
             ls_xz = self.reader.get_xz(y_center + off_layers, 0)
             surface = None
@@ -61,7 +67,7 @@ class PseudoPairDataset(Dataset):
                 surface = self.reader.surface_depth(y_center + off_layers, 0)
             x_lr, y_hr, clean = generate_pseudo_pam(
                 ls_xz, rng=rng, sigma_z=sigma_z, sigma_x=sigma_x, att_exp=att_exp,
-                speckle_scale=speckle, noise_sigma=noise, surface=surface, gain=gain,
+                speckle_scale=speckle, noise_sigma=noise, surface=surface, gain=gain, pia=pia,
             )
             channels.append(x_lr)
             if off_layers == 0:

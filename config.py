@@ -177,7 +177,8 @@ THIN_WEIGHT_FLOOR = 0.15
 
 # 表面回波：实测 回波/血管p99 中位 0.59、p90 3.19，深 154±130 层、半高宽 7 层。
 # 伪数据默认没有回波；若增强结果在表面出现亮弧伪影，把 SURFACE_ECHO 打开。
-SURFACE_ECHO = False
+SURFACE_ECHO = True
+ECHO_PROB = 0.30          # 每个样本按该概率叠表面回波（域随机化，而不是二选一）
 ECHO_AMP = 0.6
 ECHO_SIGMA = 1.5
 
@@ -227,6 +228,7 @@ LAM_LAPLACE = 0.05
 LAM_PHYSICS = 1.0
 LAM_BG = 0.5
 LAM_TV = 0.01
+LAM_THIN = 0.10           # 反幻觉：惩罚比 clean 更细的输出结构
 
 
 def pam_frame_to_ls_row(frame_idx):

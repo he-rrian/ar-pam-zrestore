@@ -9,3 +9,10 @@ __pycache__/
 *.ims
 *.bundle
 .venv/
+
+# ssh -o UserKnownHostsFile=NUL 在 Windows 上会生成同名文件
+NUL
+patch*.py
+gz_*.log
+upload*.ps1
+upload_progress.log

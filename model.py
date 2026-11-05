@@ -92,6 +92,19 @@ def physical_forward(pred, meta):
     return deg * torch.exp(-att_exp[:, None, None, None] * z)
 
 
+def _gauss_x(sigma, k, device, dtype):
+    x = torch.arange(k, device=device, dtype=dtype) - k // 2
+    g = torch.exp(-(x ** 2) / (2.0 * sigma ** 2))
+    g = g / g.sum()
+    return g.view(1, 1, 1, k)
+
+
+def thin_part(img, sigma=2.0, k=9):
+    """沿 X 的高频（比 sigma 更细的结构）。用于惩罚"比物理支持更细"的输出。"""
+    kern = _gauss_x(sigma, k, img.device, img.dtype)
+    return img - F.conv2d(img, kern, padding=(0, k // 2))
+
+
 def total_loss(
     pred,
     target,
@@ -105,6 +118,7 @@ def total_loss(
     lam_physics=1.0,
     lam_bg=0.5,
     lam_tv=0.01,
+    lam_thin=0.10,
 ):
     # 1. 信号加权 Charbonnier：背景不再主导损失。
     #    v2 去掉了 target 的上限 clip，最亮像素可能到 2~4；权重必须封顶，
@@ -129,11 +143,17 @@ def total_loss(
     lt = target[:, :, 2:, :] - 2.0 * target[:, :, 1:-1, :] + target[:, :, :-2, :]
     loss_laplace = torch.mean(torch.sqrt((lp - lt) ** 2 + 1e-3))
 
-    # 5. 物理退化一致性（与 dataset 的前向模型严格一致）
+    # 5. 物理退化一致性（与 dataset 的前向模型严格一致）。
+    #    与空间项用同一个尺度权重：否则空间项不要求毛细血管、物理项仍要求，
+    #    两者互相拉扯（隐患 #1）。
     loss_physics = pred.new_zeros(())
     if clean_deg is not None and meta is not None:
         deg = physical_forward(pred, meta)
-        loss_physics = F.l1_loss(deg, clean_deg)
+        if weight is not None:
+            ww = weight
+            loss_physics = ((deg - clean_deg).abs() * ww).sum() / (ww.sum() + 1e-6)
+        else:
+            loss_physics = F.l1_loss(deg, clean_deg)
 
     # 6. 空白区惩罚：输入无信号、目标无信号的地方，输出必须接近 0
     loss_bg = pred.new_zeros(())
@@ -144,6 +164,13 @@ def total_loss(
     # 7. TV（沿 Z 的轻度平滑）
     loss_tv = torch.mean(torch.abs(pred[:, :, 1:, :] - pred[:, :, :-1, :]))
 
+    # 8. 反幻觉：输出在"比物理支持更细"的尺度上不得比 clean 更强。
+    #    clean 已经过 PSF 模糊，所以这一项直接惩罚凭空多出来的细结构（隐患 #2）。
+    loss_thin = pred.new_zeros(())
+    if clean_deg is not None:
+        excess = torch.relu(thin_part(pred).abs() - thin_part(clean_deg).abs())
+        loss_thin = excess.mean()
+
     return (
         loss_spatial
         + lam_mean * loss_mean
@@ -152,4 +179,5 @@ def total_loss(
         + lam_physics * loss_physics
         + lam_bg * loss_bg
         + lam_tv * loss_tv
+        + lam_thin * loss_thin
     )

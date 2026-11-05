@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 import config as C
 import pam_io
 from dataset import PseudoPairDataset, build_split
-from model import AxialNAFNet, total_loss
+from model import AxialNAFNet, total_loss, physical_forward
 
 
 def worker_init_fn(worker_id):
@@ -83,6 +83,7 @@ def main():
         probe = build_real_probe(cache).to(device)
 
     best = float("inf")
+    best_real = float("inf")
     for ep in range(1, args.epochs + 1):
         model.train()
         tl = 0.0
@@ -96,7 +97,7 @@ def main():
                 meta=meta,
                 weight=W,
                 lam_mean=C.LAM_MEAN, lam_grad=C.LAM_GRAD, lam_laplace=C.LAM_LAPLACE,
-                lam_physics=C.LAM_PHYSICS, lam_bg=C.LAM_BG, lam_tv=C.LAM_TV,
+                lam_physics=C.LAM_PHYSICS, lam_bg=C.LAM_BG, lam_tv=C.LAM_TV, lam_thin=C.LAM_THIN,
             )
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -120,22 +121,37 @@ def main():
 
         msg = f"Epoch [{ep:02d}/{args.epochs}] train {tl:.5f} | val {vl:.5f}"
 
-        # 真实域探针：只观察，不选模型
+        # 真实域探针：既监控坍缩，也给一个"真实数据自洽性"分数做第二 checkpoint。
+        # 注意：这个分数只衡量前向一致性与空白区，不能代表"重建正确"，
+        # 所以另存为 best_real_*.pth，不覆盖按伪验证集选出的主模型。
+        real_score = None
         if probe is not None:
             with torch.no_grad():
                 out = model(probe)
                 inp = probe[:, 2:3]
                 empty = inp < 0.02
+                meta_cal = torch.tensor([[C.PSF_SIGMA_Z, C.PSF_SIGMA_X, C.ATT_EXP]],
+                                        device=device, dtype=out.dtype)
+                deg = physical_forward(out, meta_cal)
+                alpha = (deg * inp).sum() / ((deg * deg).sum() + 1e-8)
+                res = ((alpha * deg - inp).norm() / (inp.norm() + 1e-8)).item()
+                ghost = (out[empty].mean() if empty.any() else torch.tensor(0.)).item()
+                real_score = res + 5.0 * ghost
                 msg += (f" | real in {inp.mean():.3f} -> out {out.mean():.3f}"
-                        f" sat>{(out > 1.2).float().mean() * 100:.2f}%"
-                        f" bg {(out[empty].std() if empty.any() else torch.tensor(0.)).item():.4f}"
-                        f" zgrad {(out[:, :, 1:] - out[:, :, :-1]).abs().mean():.4f}")
+                        f" fwd {res:.3f} ghost {ghost:.4f} score {real_score:.3f}"
+                        f" sat>{(out > 1.2).float().mean() * 100:.2f}%")
         print(msg, flush=True)
 
         if vl < best:
             best = vl
             torch.save(model.state_dict(), args.out)
             print(f"  >>> saved {args.out} (val {best:.5f})", flush=True)
+
+        if real_score is not None and ep > 10 and real_score < best_real:
+            best_real = real_score
+            torch.save(model.state_dict(), os.path.splitext(args.out)[0] + "_real.pth")
+            print(f"  >>> saved {os.path.splitext(args.out)[0]}_real.pth "
+                  f"(real score {best_real:.4f})", flush=True)
 
     torch.save(model.state_dict(), os.path.splitext(args.out)[0] + "_last.pth")
 
