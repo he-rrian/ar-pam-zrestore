@@ -55,6 +55,10 @@ def main():
     ap.add_argument("--workers", type=int, default=C.NUM_WORKERS)
     ap.add_argument("--out", default="best_v2.pth")
     ap.add_argument("--no-probe", action="store_true")
+    ap.add_argument("--init", default=None, help="从该 checkpoint 初始化（微调）")
+    ap.add_argument("--lr", type=float, default=None)
+    ap.add_argument("--phys", type=float, default=None, help="物理损失权重")
+    ap.add_argument("--save-every", type=int, default=0, help="每 N epoch 存 ck_epN.pth")
     args = ap.parse_args()
 
     torch.backends.cudnn.benchmark = True
@@ -80,7 +84,10 @@ def main():
 
     model = AxialNAFNet(in_ch=6 if C.USE_RL_PRIOR else 5,
                         base_ch=-1 if C.USE_RL_PRIOR else 2).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=C.LR, weight_decay=C.WEIGHT_DECAY)
+    if args.init:
+        model.load_state_dict(torch.load(args.init, map_location=device, weights_only=True))
+        print(f"[init] loaded {args.init}")
+    opt = torch.optim.AdamW(model.parameters(), lr=(args.lr or C.LR), weight_decay=C.WEIGHT_DECAY)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs, eta_min=1e-6)
 
     probe = None
@@ -102,7 +109,7 @@ def main():
                 meta=meta,
                 weight=W,
                 lam_mean=C.LAM_MEAN, lam_grad=C.LAM_GRAD, lam_laplace=C.LAM_LAPLACE,
-                lam_physics=C.LAM_PHYSICS, lam_bg=C.LAM_BG, lam_tv=C.LAM_TV, lam_thin=C.LAM_THIN,
+                lam_physics=(args.phys if args.phys is not None else C.LAM_PHYSICS), lam_bg=C.LAM_BG, lam_tv=C.LAM_TV, lam_thin=C.LAM_THIN,
             )
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -120,7 +127,7 @@ def main():
                 pred = model(X)
                 vl += float(total_loss(pred, Y, raw_input=X[:, 2:3], clean_deg=Cg,
                                        meta=meta, weight=W, lam_mean=C.LAM_MEAN, lam_grad=C.LAM_GRAD,
-                                       lam_laplace=C.LAM_LAPLACE, lam_physics=C.LAM_PHYSICS,
+                                       lam_laplace=C.LAM_LAPLACE, lam_physics=(args.phys if args.phys is not None else C.LAM_PHYSICS),
                                        lam_bg=C.LAM_BG, lam_tv=C.LAM_TV).item())
         vl /= max(1, len(val_loader))
 
@@ -152,6 +159,8 @@ def main():
             torch.save(model.state_dict(), args.out)
             print(f"  >>> saved {args.out} (val {best:.5f})", flush=True)
 
+        if args.save_every and ep % args.save_every == 0:
+            torch.save(model.state_dict(), f"ck_ep{ep:02d}.pth")
         if real_score is not None and ep > 10 and real_score < best_real:
             best_real = real_score
             torch.save(model.state_dict(), os.path.splitext(args.out)[0] + "_real.pth")

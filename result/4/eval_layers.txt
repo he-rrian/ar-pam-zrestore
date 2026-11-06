@@ -1,0 +1,9 @@
+[LS] 从 4_ls_grid.npy 读 457 层窗口
+[LS] 采样 16 个 Y，表面完整落在窗口内的 2 个 (12%)
+     有效 Y 范围: (np.int64(2500), np.int64(4300))
+[curve] LS vs PAM(raw) density–depth 相关 = 0.163
+[FWHM vs 表面下深度]  median Z-FWHM (px, 1 px = 2.1 um)
+      0-100 层: raw   6.0  enh   3.5
+    100-200 层: raw   4.3  enh   2.8
+    200-320 层: raw   4.0  enh   2.5
+saved /root/autodl-tmp/ar_pam/qc/layers_mouse4.png
