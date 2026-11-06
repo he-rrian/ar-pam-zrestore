@@ -231,6 +231,8 @@ LAM_TV = 0.01
 LAM_THIN = 0.0
 # 第 3 轮：把 RL 反卷积结果作为第 6 个输入通道（物理先验）
 USE_RL_PRIOR = True
+# 第 7 轮：按脑表面展平后再造伪配对（表面固定，960um 窗口处处完整）
+FLATTEN_LS = True
 # 第 4 轮：L1/Charbonnier 的最优解偏向平滑，改用 L2 让峰值/振铃被对称惩罚
 LOSS_L2 = True
 RL_ITERS = 15           # 反幻觉：惩罚比 clean 更细的输出结构

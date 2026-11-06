@@ -41,15 +41,29 @@ def run(cache_path, model, out_npy, batch=8, device="cuda"):
         for s in range(0, n, batch):
             e = min(s + batch, n)
             block = []
+            shifts = []
             for i in range(s, e):
                 idx = [int(np.clip(i + k, 0, n - 1)) for k in (-2, -1, 0, 1, 2)]
-                block.append(np.stack([np.asarray(arr[j], dtype=np.float32) for j in idx]))
+                frames = [np.asarray(arr[j], dtype=np.float32) for j in idx]
+                if C.FLATTEN_LS:
+                    from flatten_ls import flatten_cols
+                    fl, sh = [], []
+                    for fr in frames:
+                        f2, s2 = flatten_cols(fr)
+                        fl.append(f2); sh.append(s2)
+                    frames = fl
+                    shifts.append(sh[2])
+                block.append(np.stack(frames))
             x = torch.from_numpy(np.stack(block)).to(device)
             if C.USE_RL_PRIOR:
                 from simulate import rl_deconv
                 rl = np.stack([rl_deconv(x[i, 2].cpu().numpy(), C.PSF_SIGMA_Z) for i in range(x.shape[0])])[:, None]
                 x = torch.cat([x, torch.from_numpy(rl).to(device)], dim=1)
-            out[s:e] = model(x).squeeze(1).cpu().numpy()
+            y = model(x).squeeze(1).cpu().numpy()
+            if C.FLATTEN_LS:
+                from flatten_ls import unflatten_cols
+                y = np.stack([unflatten_cols(y[i], shifts[i]) for i in range(len(y))])
+            out[s:e] = y
     np.save(out_npy, out)
     print(f"[infer] {out_npy} {out.shape}")
     return arr, out, meta

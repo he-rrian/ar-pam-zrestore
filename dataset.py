@@ -21,6 +21,7 @@ from torch.utils.data import Dataset
 import config as C
 from data_reader import LightsheetReader, load_or_compute_stats
 from simulate import generate_pseudo_pam, target_scale_weight, rl_deconv
+from flatten_ls import flatten_cols
 
 
 class PseudoPairDataset(Dataset):
@@ -62,6 +63,8 @@ class PseudoPairDataset(Dataset):
 
         for off_layers in C.CONTEXT_LS_LAYERS:
             ls_xz = self.reader.get_xz(y_center + off_layers, 0)
+            if C.FLATTEN_LS:
+                ls_xz, _ = flatten_cols(ls_xz)
             surface = None
             if C.ATT_RELATIVE_TO_SURFACE:
                 surface = self.reader.surface_depth(y_center + off_layers, 0)
