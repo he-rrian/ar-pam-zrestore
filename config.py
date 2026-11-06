@@ -57,7 +57,7 @@ PAM_M4_TXT_DIR = os.path.join(DATA_DIR, "4")
 
 # 声光缓存（v2 格式：float32 (N,457,1000) + 同名 .json 元数据）
 CACHE_M1_PATH = os.path.join(WORK_DIR, "1_pam_v2.npy")
-CACHE_M4_PATH = os.path.join(WORK_DIR, "4_pam_full686s.npy" if FULL_DEPTH else "4_pam_v2.npy")
+CACHE_M4_PATH = os.path.join(WORK_DIR, "4_pam_full686_s114.npy" if FULL_DEPTH else "4_pam_v2.npy")
 
 # v1 旧缓存（逐切片归一化 + 旧窗口 + 未拆奇偶），不能再使用
 LEGACY_CACHE_FILES = [
