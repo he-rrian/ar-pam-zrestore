@@ -16,3 +16,7 @@ patch*.py
 gz_*.log
 upload*.ps1
 upload_progress.log
+
+# models/ 里的权重需要备份（每个 ~900KB）
+!models/
+!models/*.pth
