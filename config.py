@@ -29,6 +29,9 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")        # 原始数据，只读
 WORK_DIR = os.path.join(BASE_DIR, "work")        # 派生数据（缓存/增强结果）
+
+# A 方案：686 层 = 1440 um，与 PAM 20:500 严格对齐（必须在 _ls_path 之前定义）
+FULL_DEPTH = True
 QC_DIR = os.path.join(BASE_DIR, "qc")            # 体检报告图
 for _d in (WORK_DIR, QC_DIR):
     os.makedirs(_d, exist_ok=True)
@@ -39,6 +42,9 @@ IMS_M1_RAW = os.path.join(DATA_DIR, "1_subset.npy")
 
 def _ls_path(mouse):
     """有"训练即用"网格就用网格（4.3 GB），否则退回原始 npy（19 GB）。"""
+    g_full = os.path.join(WORK_DIR, f"{mouse}_ls_grid_full.npy")
+    if FULL_DEPTH and os.path.exists(g_full):
+        return g_full
     g = os.path.join(WORK_DIR, f"{mouse}_ls_grid.npy")
     return g if os.path.exists(g) else os.path.join(DATA_DIR, f"{mouse}_subset.npy")
 
@@ -51,7 +57,7 @@ PAM_M4_TXT_DIR = os.path.join(DATA_DIR, "4")
 
 # 声光缓存（v2 格式：float32 (N,457,1000) + 同名 .json 元数据）
 CACHE_M1_PATH = os.path.join(WORK_DIR, "1_pam_v2.npy")
-CACHE_M4_PATH = os.path.join(WORK_DIR, "4_pam_v2.npy")
+CACHE_M4_PATH = os.path.join(WORK_DIR, "4_pam_full686s.npy" if FULL_DEPTH else "4_pam_v2.npy")
 
 # v1 旧缓存（逐切片归一化 + 旧窗口 + 未拆奇偶），不能再使用
 LEGACY_CACHE_FILES = [
@@ -81,7 +87,7 @@ PAM_FLIP_ODD_X = True
 PAM_FRAME_PITCH_UM = PAM_ACQ_FRAME_PITCH_UM      # 10 um，1000 帧 = 10 mm
 
 # 统一网络网格
-TARGET_Z = 457                    # 960 um / 2.1 um
+TARGET_Z = 686 if FULL_DEPTH else 457
 TARGET_X = 1000                   # 10000 um / 10 um（X 按 10 um 分箱）
 LS_X_BIN_UM = LS_PITCH_UM * LS_X_PIX / TARGET_X   # = 10.007 um
 
@@ -89,7 +95,7 @@ LS_X_BIN_UM = LS_PITCH_UM * LS_X_PIX / TARGET_X   # = 10.007 um
 # 2. 声光深度窗口
 # =============================================================================
 PAM_Z_START = 20                  # RF sample；跳过 0~12 的触发/振铃伪影
-PAM_Z_END = PAM_Z_START + 320     # 320 samples = 960 um
+PAM_Z_END = 500 if FULL_DEPTH else PAM_Z_START + 320
 PAM_Z_WINDOW = PAM_Z_END - PAM_Z_START
 
 # 奇偶处理结果：始终保留全部 1000 帧（奇数帧翻转后与偶数帧同向）
